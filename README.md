@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Scan for TODOs
-        uses: Gustrb/todo-creeper@v1
+        uses: Gustrb/todo-creeper@v1.1.0
         with:
           threshold: 10
 ```
@@ -55,7 +55,7 @@ jobs:
       
       - name: Scan for TODOs
         id: todo-scan
-        uses: Gustrb/todo-creeper@v1
+        uses: Gustrb/todo-creeper@v1.1.0
         with:
           threshold: 5
           exclude-patterns: 'node_modules,dist,build,.git,tests/mocks'
