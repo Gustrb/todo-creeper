@@ -1,0 +1,31 @@
+name: Todo Creeper 
+description: Identify as TODOs creep into a project's code 
+
+inputs:
+  token:
+    description: GitHub token for API access
+    required: true
+    default: ${{ github.token }}
+  
+  threshold:
+    description: Maximum number of TODOs allowed before action fails
+    required: false
+    default: '10'
+  
+  exclude-patterns:
+    description: Comma-separated patterns to exclude from TODO search
+    required: false
+    default: 'node_modules,dist,build,.git'
+
+outputs:
+  todo-count:
+    description: Total number of TODOs found
+  todo-files:
+    description: Number of files containing TODOs
+  todo-details:
+    description: Detailed TODO information
+
+runs:
+  using: node20
+  main: dist/index.js
+

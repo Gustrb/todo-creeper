@@ -1,0 +1,53 @@
+name: Example TODO Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check-todos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Scan for TODOs
+        id: todo-scan
+        uses: Gustrb/todo-creeper@v1
+        with:
+          threshold: 5
+          exclude-patterns: 'node_modules,dist,build,.git,tests/mocks'
+      
+      - name: Create TODO Report
+        if: steps.todo-scan.outputs.todo-count != '0'
+        run: |
+          echo "## 📋 TODO Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total TODOs found:** ${{ steps.todo-scan.outputs.todo-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Files affected:** ${{ steps.todo-scan.outputs.todo-files }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### TODO Details:" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.todo-scan.outputs.todo-details }}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+      
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.todo-scan.outputs.todo-count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const todoCount = '${{ steps.todo-scan.outputs.todo-count }}';
+            const todoFiles = '${{ steps.todo-scan.outputs.todo-files }}';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🔍 **TODO Creeper Report**
+              
+              Found **${todoCount} TODOs** across **${todoFiles} files**.
+              
+              Consider addressing these TODOs to improve code quality!`
+            });
