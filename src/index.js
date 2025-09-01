@@ -288,7 +288,17 @@ async function createIssueForTodo(todo, octokit, context, labels) {
   // Clean up extra whitespace
   cleanContent = cleanContent.replace(/\s+/g, ' ').trim();
   
-  const title = `TODO: ${cleanContent.substring(0, 50)}${cleanContent.length > 50 ? '...' : ''}`;
+  // Check if the content already starts with "TODO:", "FIXME:", or "HACK:"
+  // If it does, don't add another prefix
+  const todoPrefixes = /^(TODO|FIXME|HACK):\s*/i;
+  let title;
+  if (todoPrefixes.test(cleanContent)) {
+    // Content already has a prefix, use it as is
+    title = `${cleanContent.substring(0, 50)}${cleanContent.length > 50 ? '...' : ''}`;
+  } else {
+    // Content doesn't have a prefix, add "TODO:"
+    title = `TODO: ${cleanContent.substring(0, 50)}${cleanContent.length > 50 ? '...' : ''}`;
+  }
   
   let contextInfo = '';
   let assignees = [];
