@@ -57,14 +57,24 @@ async function run() {
     core.info(`🔍 Create issues enabled: ${createIssues}`);
     core.info(`🔍 Issue labels: ${issueLabels}`);
     
-    if (createIssues && context.eventName === 'pull_request') {
-      core.info('\n🔗 Processing TODOs for issue creation...');
-      const result = await processTodosForIssues(todos, octokit, context, issueLabels);
-      issuesCreated = result.created;
-      issuesLinked = result.linked;
-      core.info(`📊 Issues created: ${issuesCreated}, Issues linked: ${issuesLinked}`);
-    } else if (createIssues) {
-      core.warning('⚠️ Issue creation is enabled but only works on pull_request events');
+    if (createIssues) {
+      // Check if we're in a PR context by looking for PR number in various places
+      const prNumber = context.payload.pull_request?.number || 
+                      context.payload.number || 
+                      context.payload.issue?.number;
+      
+      core.info(`🔍 PR number detected: ${prNumber || 'none'}`);
+      
+      if (prNumber || context.eventName === 'pull_request') {
+        core.info('\n🔗 Processing TODOs for issue creation...');
+        const result = await processTodosForIssues(todos, octokit, context, issueLabels);
+        issuesCreated = result.created;
+        issuesLinked = result.linked;
+        core.info(`📊 Issues created: ${issuesCreated}, Issues linked: ${issuesLinked}`);
+      } else {
+        core.warning('⚠️ Issue creation is enabled but no PR context detected. This usually means the action is running on a push event or manual trigger.');
+        core.info('💡 To create issues, run this action on a pull_request event or ensure it has access to PR context.');
+      }
     } else {
       core.info('ℹ️ Issue creation is disabled');
     }
@@ -264,6 +274,28 @@ async function findExistingIssue(todo, octokit, context) {
 async function createIssueForTodo(todo, octokit, context, labels) {
   const title = `TODO: ${todo.content.trim().substring(0, 50)}${todo.content.length > 50 ? '...' : ''}`;
   
+  let contextInfo = '';
+  let assignees = [];
+  
+  // Try to get PR number from various sources
+  const prNumber = context.payload.pull_request?.number || 
+                  context.payload.number || 
+                  context.payload.issue?.number;
+  
+  if (prNumber) {
+    contextInfo = `This TODO was automatically detected by the TODO Creeper action in pull request #${prNumber}.`;
+    // Try to get the PR author
+    const prAuthor = context.payload.pull_request?.user?.login || 
+                    context.payload.sender?.login;
+    if (prAuthor) {
+      assignees = [prAuthor];
+    }
+  } else if (context.eventName === 'push') {
+    contextInfo = `This TODO was automatically detected by the TODO Creeper action in commit ${context.sha.substring(0, 7)} on branch ${context.ref.replace('refs/heads/', '')}.`;
+  } else {
+    contextInfo = `This TODO was automatically detected by the TODO Creeper action.`;
+  }
+  
   const body = `## TODO Item
 
 **File:** \`${todo.file}\`
@@ -276,7 +308,7 @@ ${todo.content.trim()}
 \`\`\`
 
 **Context:**
-This TODO was automatically detected by the TODO Creeper action in pull request #${context.payload.pull_request.number}.
+${contextInfo}
 
 **Action Required:**
 Please review this TODO and either:
@@ -287,14 +319,20 @@ Please review this TODO and either:
 ---
 *This issue was automatically created by [TODO Creeper](https://github.com/Gustrb/todo-creeper)*`;
 
-  const { data: issue } = await octokit.rest.issues.create({
+  const issueData = {
     owner: context.repo.owner,
     repo: context.repo.repo,
     title: title,
     body: body,
-    labels: labels,
-    assignees: [context.payload.pull_request.user.login]
-  });
+    labels: labels
+  };
+  
+  // Only add assignees if we have them
+  if (assignees.length > 0) {
+    issueData.assignees = assignees;
+  }
+
+  const { data: issue } = await octokit.rest.issues.create(issueData);
 
   return issue;
 }
