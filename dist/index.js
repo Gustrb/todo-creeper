@@ -32108,7 +32108,23 @@ async function findExistingIssue(todo, octokit, context) {
 }
 
 async function createIssueForTodo(todo, octokit, context, labels) {
-  const title = `TODO: ${todo.content.trim().substring(0, 50)}${todo.content.length > 50 ? '...' : ''}`;
+  // Clean up the TODO content by removing comment markers and extra whitespace
+  let cleanContent = todo.content.trim();
+  
+  // Remove common comment markers
+  cleanContent = cleanContent.replace(/^\/\/\s*/, '');  // Remove // at start
+  cleanContent = cleanContent.replace(/^#\s*/, '');     // Remove # at start
+  cleanContent = cleanContent.replace(/^\/\*\s*/, '');  // Remove /* at start
+  cleanContent = cleanContent.replace(/^<!--\s*/, '');  // Remove <!-- at start
+  
+  // Remove trailing comment markers
+  cleanContent = cleanContent.replace(/\s*\*\/$/, '');  // Remove */ at end
+  cleanContent = cleanContent.replace(/\s*-->$/, '');   // Remove --> at end
+  
+  // Clean up extra whitespace
+  cleanContent = cleanContent.replace(/\s+/g, ' ').trim();
+  
+  const title = `TODO: ${cleanContent.substring(0, 50)}${cleanContent.length > 50 ? '...' : ''}`;
   
   let contextInfo = '';
   let assignees = [];
