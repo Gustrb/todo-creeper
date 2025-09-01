@@ -19,6 +19,8 @@ jobs:
         with:
           threshold: 5
           exclude-patterns: 'node_modules,dist,build,.git,tests/mocks'
+          create-issues: true
+          issue-labels: 'todo,enhancement,needs-review'
       
       - name: Create TODO Report
         if: steps.todo-scan.outputs.todo-count != '0'
@@ -27,6 +29,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Total TODOs found:** ${{ steps.todo-scan.outputs.todo-count }}" >> $GITHUB_STEP_SUMMARY
           echo "**Files affected:** ${{ steps.todo-scan.outputs.todo-files }}" >> $GITHUB_STEP_SUMMARY
+          echo "**New issues created:** ${{ steps.todo-scan.outputs.issues-created }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Existing issues linked:** ${{ steps.todo-scan.outputs.issues-linked }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### TODO Details:" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY

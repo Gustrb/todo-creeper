@@ -16,6 +16,16 @@ inputs:
     description: Comma-separated patterns to exclude from TODO search
     required: false
     default: 'node_modules,dist,build,.git'
+  
+  create-issues:
+    description: Whether to create GitHub issues for TODOs without associated issues
+    required: false
+    default: 'false'
+  
+  issue-labels:
+    description: Comma-separated labels to apply to created issues
+    required: false
+    default: 'todo,enhancement'
 
 outputs:
   todo-count:
@@ -24,6 +34,10 @@ outputs:
     description: Number of files containing TODOs
   todo-details:
     description: Detailed TODO information
+  issues-created:
+    description: Number of new issues created
+  issues-linked:
+    description: Number of TODOs linked to existing issues
 
 runs:
   using: node20

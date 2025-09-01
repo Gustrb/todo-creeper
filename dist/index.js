@@ -31848,6 +31848,8 @@ async function run() {
       .split(',')
       .map(pattern => pattern.trim())
       .filter(pattern => pattern.length > 0);
+    const createIssues = core.getInput('create-issues', { required: false }) === 'true';
+    const issueLabels = core.getInput('issue-labels', { required: false }) || 'todo,enhancement';
 
     // Initialize GitHub client
     const octokit = github.getOctokit(token);
@@ -31882,6 +31884,21 @@ async function run() {
         core.info(`${index + 1}. ${todo.file}:${todo.line} - ${todo.content.trim()}`);
       });
     }
+
+    // Create issues for TODOs if requested
+    let issuesCreated = 0;
+    let issuesLinked = 0;
+    
+    if (createIssues && context.eventName === 'pull_request') {
+      core.info('\n🔗 Processing TODOs for issue creation...');
+      const result = await processTodosForIssues(todos, octokit, context, issueLabels);
+      issuesCreated = result.created;
+      issuesLinked = result.linked;
+    }
+    
+    // Set additional outputs
+    core.setOutput('issues-created', issuesCreated.toString());
+    core.setOutput('issues-linked', issuesLinked.toString());
 
     // Check threshold
     if (todoCount > threshold) {
@@ -31992,6 +32009,114 @@ async function scanFileForTodos(file, octokit, context) {
   }
 
   return todos;
+}
+
+async function processTodosForIssues(todos, octokit, context, issueLabels) {
+  const labels = issueLabels.split(',').map(label => label.trim());
+  let created = 0;
+  let linked = 0;
+  
+  for (const todo of todos) {
+    try {
+      // Check if TODO already has an associated issue
+      const existingIssue = await findExistingIssue(todo, octokit, context);
+      
+      if (existingIssue) {
+        core.info(`🔗 TODO in ${todo.file}:${todo.line} already has issue #${existingIssue.number}`);
+        linked++;
+      } else {
+        // Create new issue for this TODO
+        const issue = await createIssueForTodo(todo, octokit, context, labels);
+        core.info(`✅ Created issue #${issue.number} for TODO in ${todo.file}:${todo.line}`);
+        created++;
+      }
+    } catch (error) {
+      core.warning(`Failed to process TODO in ${todo.file}:${todo.line}: ${error.message}`);
+    }
+  }
+  
+  return { created, linked };
+}
+
+async function findExistingIssue(todo, octokit, context) {
+  try {
+    // Search for existing issues that might be related to this TODO
+    const searchQuery = `repo:${context.repo.owner}/${context.repo.repo} "${todo.content.trim()}" is:issue`;
+    
+    const { data: searchResults } = await octokit.rest.search.issuesAndPullRequests({
+      q: searchQuery,
+      per_page: 10
+    });
+
+    // Look for issues with similar content or file references
+    for (const issue of searchResults.items) {
+      if (issue.body && (
+        issue.body.includes(todo.file) ||
+        issue.body.includes(todo.content.trim()) ||
+        issue.title.toLowerCase().includes('todo') ||
+        issue.title.toLowerCase().includes('fixme') ||
+        issue.title.toLowerCase().includes('hack')
+      )) {
+        return issue;
+      }
+    }
+
+    // Also check for issues with file path in title or body
+    const fileSearchQuery = `repo:${context.repo.owner}/${context.repo.repo} "${todo.file}" is:issue`;
+    const { data: fileSearchResults } = await octokit.rest.search.issuesAndPullRequests({
+      q: fileSearchQuery,
+      per_page: 10
+    });
+
+    for (const issue of fileSearchResults.items) {
+      if (issue.body && issue.body.includes(todo.content.trim())) {
+        return issue;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    core.warning(`Failed to search for existing issues: ${error.message}`);
+    return null;
+  }
+}
+
+async function createIssueForTodo(todo, octokit, context, labels) {
+  const title = `TODO: ${todo.content.trim().substring(0, 50)}${todo.content.length > 50 ? '...' : ''}`;
+  
+  const body = `## TODO Item
+
+**File:** \`${todo.file}\`
+**Line:** ${todo.line}
+**Type:** ${todo.type}
+
+**Content:**
+\`\`\`
+${todo.content.trim()}
+\`\`\`
+
+**Context:**
+This TODO was automatically detected by the TODO Creeper action in pull request #${context.payload.pull_request.number}.
+
+**Action Required:**
+Please review this TODO and either:
+1. Address the TODO item
+2. Create a proper issue with more details
+3. Remove the TODO if it's no longer needed
+
+---
+*This issue was automatically created by [TODO Creeper](https://github.com/Gustrb/todo-creeper)*`;
+
+  const { data: issue } = await octokit.rest.issues.create({
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    title: title,
+    body: body,
+    labels: labels,
+    assignees: [context.payload.pull_request.user.login]
+  });
+
+  return issue;
 }
 
 // Run the action
