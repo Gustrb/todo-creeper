@@ -53,16 +53,26 @@ async function run() {
     let issuesCreated = 0;
     let issuesLinked = 0;
     
+    core.info(`🔍 Event type: ${context.eventName}`);
+    core.info(`🔍 Create issues enabled: ${createIssues}`);
+    core.info(`🔍 Issue labels: ${issueLabels}`);
+    
     if (createIssues && context.eventName === 'pull_request') {
       core.info('\n🔗 Processing TODOs for issue creation...');
       const result = await processTodosForIssues(todos, octokit, context, issueLabels);
       issuesCreated = result.created;
       issuesLinked = result.linked;
+      core.info(`📊 Issues created: ${issuesCreated}, Issues linked: ${issuesLinked}`);
+    } else if (createIssues) {
+      core.warning('⚠️ Issue creation is enabled but only works on pull_request events');
+    } else {
+      core.info('ℹ️ Issue creation is disabled');
     }
     
     // Set additional outputs
     core.setOutput('issues-created', issuesCreated.toString());
     core.setOutput('issues-linked', issuesLinked.toString());
+    core.info(`📤 Setting outputs - issues-created: ${issuesCreated}, issues-linked: ${issuesLinked}`);
 
     // Check threshold
     if (todoCount > threshold) {
@@ -180,8 +190,12 @@ async function processTodosForIssues(todos, octokit, context, issueLabels) {
   let created = 0;
   let linked = 0;
   
+  core.info(`🔍 Processing ${todos.length} TODOs for issue creation...`);
+  
   for (const todo of todos) {
     try {
+      core.info(`🔍 Processing TODO: ${todo.file}:${todo.line} - ${todo.content.trim()}`);
+      
       // Check if TODO already has an associated issue
       const existingIssue = await findExistingIssue(todo, octokit, context);
       
@@ -190,6 +204,7 @@ async function processTodosForIssues(todos, octokit, context, issueLabels) {
         linked++;
       } else {
         // Create new issue for this TODO
+        core.info(`📝 Creating new issue for TODO in ${todo.file}:${todo.line}`);
         const issue = await createIssueForTodo(todo, octokit, context, labels);
         core.info(`✅ Created issue #${issue.number} for TODO in ${todo.file}:${todo.line}`);
         created++;
@@ -199,6 +214,7 @@ async function processTodosForIssues(todos, octokit, context, issueLabels) {
     }
   }
   
+  core.info(`📊 Processed ${todos.length} TODOs: ${created} created, ${linked} linked`);
   return { created, linked };
 }
 
